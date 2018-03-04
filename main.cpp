@@ -25,13 +25,20 @@ int main(int argc, char *argv[])
             return 0;
         }
 
+        freopen("cmd_input.txt", "rt", stdin);
+
         auto blk = bulk::BulkContext(commandsCount);
+
+        auto cdt = async(std::launch::async, &bulk::ConsoleDumper::dumper, blk.conDumper);
+
+
         string line;
         while(getline(cin, line))
         {
-            blk.add_command(line);
+            blk.add_line(line);
         }
         blk.end_input();
+        blk.print_metrics();
     }
     catch(exception &e)
     {

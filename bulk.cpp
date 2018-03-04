@@ -10,7 +10,7 @@ void Commands::push_back(string str)
         timestamp = time(nullptr);
     }
     cmds.push_back(str);
-    ++cmdCounter;
+    ++metrics.commands;
 }
 
 void Commands::push_back_block(string str)
@@ -20,12 +20,14 @@ void Commands::push_back_block(string str)
         timestamp = time(nullptr);
     }
     cmds.push_back(str);
+    ++metrics.commands;
 }
 
 void Commands::clear()
 {
     cmds.clear();
-    cmdCounter = 0;
+    metrics.commands = 0;
+    metrics.blocks = 0;
 }
 
 void Dumper::subscribe(Observer *ob)
@@ -33,7 +35,7 @@ void Dumper::subscribe(Observer *ob)
     subs.push_back(ob);
 }
 
-void Dumper::notify()
+void Dumper::notify(Commands &cmds)
 {
     for (auto s : subs)
     {
@@ -43,9 +45,17 @@ void Dumper::notify()
 
 void Dumper::dump_commands(Commands &cmd)
 {
-    cmds = cmd;
-    notify();
+    notify(cmd);
 }
+
+void Dumper::stop_dumping()
+{
+    for (auto s : subs)
+    {
+        s->run_flag = false;
+    }
+}
+
 
 ConsoleDumper::ConsoleDumper(Dumper *dmp)
 {
@@ -54,22 +64,44 @@ ConsoleDumper::ConsoleDumper(Dumper *dmp)
 
 void ConsoleDumper::dump(Commands &cmd)
 {
-    bool is_first = true;
-    cout << "bulk: ";
-    for(auto s : cmd.cmds)
     {
-        if(is_first)
-        {
-            is_first = false;
-        }
-        else
-        {
-            cout << ", ";
-        }
-        cout << s;
+        lock_guard<mutex> lg(m);
+        commands = cmd;
+        flag = true;
     }
-    cout << endl;
+    cv.notify_one();
 }
+
+void ConsoleDumper::dumper()
+{
+    while (run_flag)
+    {
+        unique_lock<mutex> lk(m);
+        cv.wait(lk, [this]{return flag;});
+
+        if(commands.cmds.size())
+        {
+            metrics += commands.metrics;
+            bool is_first = true;
+            cout << "bulk: ";
+            for(auto s : commands.cmds)
+            {
+                if(is_first)
+                {
+                    is_first = false;
+                }
+                else
+                {
+                    cout << ", ";
+                }
+                cout << s;
+            }
+            cout << endl;
+        }
+        flag = false;
+    }
+}
+
 
 FileDumper::FileDumper(Dumper *dmp)
 {
@@ -106,10 +138,10 @@ void FileDumper::dump(Commands &cmd)
     of.close();
 }
 
-BulkContext::BulkContext(size_t bulk_size)
+BulkContext::BulkContext(size_t bulk_size_)
 {
     //cout << "ctor BulkContext" << endl;
-    commandsCount = bulk_size;
+    bulk_size = bulk_size_;
     dumper = new Dumper();
     conDumper = new ConsoleDumper(dumper);
     fileDumper = new FileDumper(dumper);
@@ -137,7 +169,7 @@ void BulkContext::process_input(const char *line, size_t size)
         }
         else
         {
-            add_command(cur_line);
+            add_line(cur_line);
             cur_line.clear();
         }
     }
@@ -148,15 +180,17 @@ void BulkContext::process_input(const char *line, size_t size)
         input_line_tail = cur_line;
     }
 }
-void BulkContext::add_command(string &cmd)
+void BulkContext::add_line(string &cmd)
 {
+    ++lines_count;
     if((cmd != "{") && !blockFound)
     {
         cmds.push_back(cmd);
 
-        if(cmds.cmdCounter == commandsCount)
+        if(cmds.metrics.commands == bulk_size)
         {
             dumper->dump_commands(cmds);
+            metrics += cmds.metrics;
             cmds.clear();
         }
     }
@@ -165,9 +199,10 @@ void BulkContext::add_command(string &cmd)
         if(!blockFound)
         {
             blockFound = true;
-            if(cmds.cmdCounter)
+            if(cmds.metrics.commands)
             {
                 dumper->dump_commands(cmds);
+                metrics += cmds.metrics;
                 cmds.clear();
             }
             return;
@@ -182,10 +217,13 @@ void BulkContext::add_command(string &cmd)
             if (nestedBlocksCount > 0)
             {
                 --nestedBlocksCount;
+                ++cmds.metrics.blocks;
             }
             else
             {
+                ++cmds.metrics.blocks;
                 dumper->dump_commands(cmds);
+                metrics += cmds.metrics;
                 cmds.clear();
                 blockFound = false;
             }
@@ -199,10 +237,25 @@ void BulkContext::add_command(string &cmd)
 
 void BulkContext::end_input()
 {
-    if(cmds.cmdCounter)
+    if(cmds.metrics.commands)
     {
         dumper->dump_commands(cmds);
+        metrics.commands += cmds.metrics.commands;
+        dumper->stop_dumping();
+
     }
+}
+
+void BulkContext::print_metrics()
+{
+    cout << "main: " << lines_count << " lines, "
+                     << metrics.commands << " commands, "
+                     << metrics.blocks << " blocks"
+                     << endl;
+
+    cout << "log: " << conDumper->metrics.commands << " commands, "
+                    << conDumper->metrics.blocks << " blocks"
+                    << endl;
 }
 
 

@@ -6,6 +6,9 @@ endif()
 
 project(bulkmt VERSION 0.0.$ENV{TRAVIS_BUILD_NUMBER})
 
+set(CXX_STANDARD 14)
+find_package(Threads)
+
 configure_file(version.h.in version.h)
 
 add_library(bulk_lib bulk.h bulk.cpp)
@@ -20,7 +23,9 @@ set_target_properties(bulk_lib bulkmt
                 COMPILE_OPTIONS -Wpedantic -Wall -Wextra
 )
 
-target_link_libraries(bulkmt bulk_lib)
+target_link_libraries(bulkmt bulk_lib
+    ${CMAKE_THREAD_LIBS_INIT}
+)
 
 install(TARGETS bulkmt RUNTIME DESTINATION bin)
 
