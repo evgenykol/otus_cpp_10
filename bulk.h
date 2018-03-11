@@ -9,6 +9,9 @@
 #include <thread>
 #include <future>
 #include <atomic>
+#include <memory>
+#include <queue>
+#include <chrono>
 
 using namespace std;
 
@@ -38,6 +41,11 @@ public:
         this->commands += rhs.commands;
         return *this;
     }
+
+    static void print_metrics(const Metrics &m, const string &name)
+    {
+        cout << name <<" " << m.commands << " commands, " << m.blocks << " blocks" << endl;
+    }
 };
 
 class Commands
@@ -65,9 +73,10 @@ public:
     {
         run_flag = false;
     }
-    Metrics metrics;
 
     virtual void dump(Commands &cmd) = 0;
+    virtual void stop() = 0;
+
     atomic<bool> run_flag;
 };
 
@@ -87,19 +96,26 @@ class ConsoleDumper : public Observer
     condition_variable cv;
     bool flag;
     Commands commands;
-public:
 
-    ConsoleDumper(Dumper *dmp);
+public:
+    ConsoleDumper(shared_ptr<Dumper> dmp);
     void dump(Commands &cmd);
-    void dumper();
+    void stop();
+    Metrics dumper();
 };
 
 class FileDumper : public Observer
 {
-public:
+    mutex m;
+    condition_variable cv;
+    bool flag;
+    queue<Commands> commands;
 
-    FileDumper(Dumper *dmp);
+public:
+    FileDumper(shared_ptr<Dumper> dmp);
     void dump(Commands &cmd);
+    void stop();
+    Metrics dumper();
     string get_unique_number();
 };
 
@@ -108,24 +124,22 @@ class BulkContext
 {
     static constexpr char delimiter = '\n';
     size_t bulk_size;
-    Dumper* dumper;
+    shared_ptr<Dumper> dumper;
 
     Commands cmds;
     Metrics metrics;
-    size_t lines_count;
 
-    string input_line_tail;
-    bool blockFound = false;
-    int nestedBlocksCount = 0;
+    size_t lines_count;
+    bool blockFound;
+    int nestedBlocksCount;
 
 public:
-    ConsoleDumper* conDumper;
-    FileDumper* fileDumper;
+    shared_ptr<ConsoleDumper> conDumper;
+    shared_ptr<FileDumper> fileDumper;
 
     BulkContext(size_t bulk_size);
     ~BulkContext();
 
-    void process_input(const char *line, size_t size);
     void add_line(string &cmd);
     void end_input();
     void print_metrics();

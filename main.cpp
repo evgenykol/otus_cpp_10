@@ -1,4 +1,5 @@
 #include <iostream>
+#include "string.h"
 
 #include "version.h"
 #include "bulk.h"
@@ -29,8 +30,9 @@ int main(int argc, char *argv[])
 
         auto blk = bulk::BulkContext(commandsCount);
 
-        auto cdt = async(std::launch::async, &bulk::ConsoleDumper::dumper, blk.conDumper);
-
+        auto cdt  = async(std::launch::async, &bulk::ConsoleDumper::dumper, blk.conDumper);
+        auto fdt1 = async(std::launch::async, &bulk::FileDumper::dumper, blk.fileDumper);
+        auto fdt2 = async(std::launch::async, &bulk::FileDumper::dumper, blk.fileDumper);
 
         string line;
         while(getline(cin, line))
@@ -38,11 +40,16 @@ int main(int argc, char *argv[])
             blk.add_line(line);
         }
         blk.end_input();
+
         blk.print_metrics();
+        bulk::Metrics::print_metrics(cdt.get(), "log");
+        bulk::Metrics::print_metrics(cdt.get(), "file1");
+        bulk::Metrics::print_metrics(cdt.get(), "file2");
+
     }
     catch(exception &e)
     {
-        cout << e.what();
+        cout << "exception: " << e.what() << endl;
     }
     return 0;
 }
