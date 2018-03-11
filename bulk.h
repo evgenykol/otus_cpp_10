@@ -66,11 +66,13 @@ class Observer
 public:
     Observer()
     {
+        cout << "ctor Observer" << endl;
         run_flag = true;
     }
 
     ~Observer()
     {
+        cout << "dtor Observer" << endl;
         run_flag = false;
     }
 
@@ -84,6 +86,8 @@ class Dumper
 {
     vector<Observer *> subs;
 public:
+    Dumper();
+    ~Dumper();
     void subscribe(Observer *ob);
     void notify(Commands &cmd);
     void dump_commands(Commands &cmd);
@@ -99,6 +103,7 @@ class ConsoleDumper : public Observer
 
 public:
     ConsoleDumper(shared_ptr<Dumper> dmp);
+    ~ConsoleDumper();
     void dump(Commands &cmd);
     void stop();
     Metrics dumper();
@@ -113,6 +118,7 @@ class FileDumper : public Observer
 
 public:
     FileDumper(shared_ptr<Dumper> dmp);
+    ~FileDumper();
     void dump(Commands &cmd);
     void stop();
     Metrics dumper();

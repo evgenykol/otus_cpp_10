@@ -41,9 +41,13 @@ int main(int argc, char *argv[])
         }
         blk.end_input();
 
+        cout << endl;
         blk.print_metrics();
+        cout << "log ->" << endl;
         bulk::Metrics::print_metrics(cdt.get(), "log");
+        cout << "file1 ->" << endl;
         bulk::Metrics::print_metrics(cdt.get(), "file1");
+        cout << "file2 ->" << endl;
         bulk::Metrics::print_metrics(cdt.get(), "file2");
 
     }

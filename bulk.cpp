@@ -35,6 +35,16 @@ void Commands::clear()
     metrics.blocks = 0;
 }
 
+Dumper::Dumper()
+{
+    cout << "ctor Dumper" << endl;
+}
+
+Dumper::~Dumper()
+{
+    cout << "dtor Dumper" << endl;
+}
+
 void Dumper::subscribe(Observer *ob)
 {
     subs.push_back(ob);
@@ -61,15 +71,20 @@ void Dumper::stop_dumping()
     }
 }
 
-
 ConsoleDumper::ConsoleDumper(shared_ptr<Dumper> dmp)
 {
     cout << "ctor ConsoleDumper" << endl;
     dmp->subscribe(this);
 }
 
+ConsoleDumper::~ConsoleDumper()
+{
+    cout << "dtor ConsoleDumper" << endl;
+}
+
 void ConsoleDumper::dump(Commands &cmd)
 {
+    cout << "ConsoleDumper::dump" << endl;
     {
         lock_guard<mutex> lg(m);
         commands = cmd;
@@ -80,6 +95,7 @@ void ConsoleDumper::dump(Commands &cmd)
 
 void ConsoleDumper::stop()
 {
+    cout << "ConsoleDumper::stop" << endl;
     {
         lock_guard<mutex> lg(m);
         run_flag = false;
@@ -120,13 +136,16 @@ Metrics ConsoleDumper::dumper()
     return log_metrics;
 }
 
-
 FileDumper::FileDumper(shared_ptr<Dumper> dmp)
 {
     cout << "ctor FileDumper" << endl;
     dmp->subscribe(this);
 }
 
+FileDumper::~FileDumper()
+{
+    cout << "dtor FileDumper" << endl;
+}
 
 string FileDumper::get_unique_number()
 {
@@ -136,6 +155,7 @@ string FileDumper::get_unique_number()
 
 void FileDumper::dump(Commands &cmd)
 {
+    cout << "FileDumper::dump" << endl;
     {
         lock_guard<mutex> lg(m);
         commands.push(cmd);
@@ -145,6 +165,7 @@ void FileDumper::dump(Commands &cmd)
 
 void FileDumper::stop()
 {
+    cout << "FileDumper::stop" << endl;
     {
         lock_guard<mutex> lg(m);
         run_flag = false;
@@ -156,10 +177,10 @@ void FileDumper::stop()
 
 Metrics FileDumper::dumper()
 {
-    while (run_flag)
+    while (run_flag || commands.size())
     {
         unique_lock<mutex> lk(m);
-        cv.wait(lk, [this]{return commands.size();});
+        cv.wait_for(lk, 10s/*,[this]{return commands.size();}*/);
 
         auto cmds = commands.front();
         commands.pop();
