@@ -7,7 +7,6 @@ endif()
 
 project(bulkmt VERSION 0.0.$ENV{TRAVIS_BUILD_NUMBER})
 
-set(CXX_STANDARD 14)
 find_package(Threads)
 
 configure_file(version.h.in version.h)
