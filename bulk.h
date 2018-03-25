@@ -73,7 +73,7 @@ public:
 
     ~Observer()
     {
-        cout << "dtor Observer" << endl;
+        //cout << "dtor Observer" << endl;
         run_flag = false;
     }
 
