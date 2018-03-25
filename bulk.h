@@ -44,7 +44,7 @@ public:
 
     static void print_metrics(const Metrics &m, const string &name)
     {
-        cout << name <<" " << m.commands << " commands, " << m.blocks << " blocks" << endl;
+        cout << name <<": " << m.commands << " commands, " << m.blocks << " blocks" << endl;
     }
 };
 
@@ -139,16 +139,29 @@ class BulkContext
     bool blockFound;
     int nestedBlocksCount;
 
+    queue<Commands> *console_queue;
+    queue<Commands> *file_queue;
+
+    mutex *console_mutex;
+    mutex *file_mutex;
+
+    condition_variable *console_cv;
+    condition_variable *file_cv;
+
 public:
     shared_ptr<ConsoleDumper> conDumper;
     shared_ptr<FileDumper> fileDumper;
 
     BulkContext(size_t bulk_size);
+    BulkContext(size_t bulk_size_, queue<Commands> *cq, queue<Commands> *fq,
+                        mutex *cm, mutex *fm,
+                        condition_variable *ccv, condition_variable *fcv);
     ~BulkContext();
 
     void add_line(string &cmd);
     void end_input();
     void print_metrics();
+    void dump(Commands cmd);
 };
 
 }

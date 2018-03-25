@@ -211,17 +211,39 @@ Metrics FileDumper::dumper()
     return log_metrics;
 }
 
-BulkContext::BulkContext(size_t bulk_size_)
+//BulkContext::BulkContext(size_t bulk_size_)
+//{
+//    cout << "ctor BulkContext" << endl;
+//    bulk_size = bulk_size_;
+//    blockFound = false;
+//    nestedBlocksCount = 0;
+//    lines_count = 0;
+
+//    dumper = make_shared<Dumper>();
+//    conDumper = make_shared<ConsoleDumper>(dumper);
+//    fileDumper = make_shared<FileDumper>(dumper);
+//}
+
+BulkContext::BulkContext(size_t bulk_size_, queue<Commands> *cq, queue<Commands> *fq,
+                    mutex *cm, mutex *fm,
+                    condition_variable *ccv, condition_variable *fcv)
 {
-    cout << "ctor BulkContext" << endl;
+    cout << "ctor BulkContext 1" << endl;
     bulk_size = bulk_size_;
     blockFound = false;
     nestedBlocksCount = 0;
     lines_count = 0;
 
     dumper = make_shared<Dumper>();
-    conDumper = make_shared<ConsoleDumper>(dumper);
-    fileDumper = make_shared<FileDumper>(dumper);
+
+    console_queue = cq;
+    file_queue = fq;
+
+    console_mutex = cm;
+    file_mutex = fm;
+
+    console_cv = ccv;
+    file_cv = fcv;
 }
 
 BulkContext::~BulkContext()
@@ -238,7 +260,8 @@ void BulkContext::add_line(string &cmd)
 
         if(cmds.metrics.commands == bulk_size)
         {
-            dumper->dump_commands(cmds);
+            //dumper->dump_commands(cmds);
+            dump(cmds);
             metrics += cmds.metrics;
             cmds.clear();
         }
@@ -250,7 +273,8 @@ void BulkContext::add_line(string &cmd)
             blockFound = true;
             if(cmds.metrics.commands)
             {
-                dumper->dump_commands(cmds);
+                //dumper->dump_commands(cmds);
+                dump(cmds);
                 metrics += cmds.metrics;
                 cmds.clear();
             }
@@ -271,7 +295,8 @@ void BulkContext::add_line(string &cmd)
             else
             {
                 ++cmds.metrics.blocks;
-                dumper->dump_commands(cmds);
+                //dumper->dump_commands(cmds);
+                dump(cmds);
                 metrics += cmds.metrics;
                 cmds.clear();
                 blockFound = false;
@@ -288,10 +313,26 @@ void BulkContext::end_input()
 {
     if(cmds.metrics.commands)
     {
-        dumper->dump_commands(cmds);
+        //dumper->dump_commands(cmds);
+        dump(cmds);
         metrics.commands += cmds.metrics.commands;
     }
-    dumper->stop_dumping();
+    //dumper->stop_dumping();
+}
+
+void BulkContext::dump(Commands cmd)
+{
+    {
+        lock_guard<mutex> lgc(*console_mutex);
+        console_queue->push(cmd);
+    }
+    console_cv->notify_one();
+
+    {
+        lock_guard<mutex> lgf(*file_mutex);
+        file_queue->push(cmd);
+    }
+    file_cv->notify_one();
 }
 
 void BulkContext::print_metrics()
