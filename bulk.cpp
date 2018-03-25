@@ -2,11 +2,6 @@
 
 using namespace std;
 using namespace bulk;
-using namespace std::chrono_literals;
-
-namespace bulk {
-    thread_local Metrics log_metrics;
-}
 
 void Commands::push_back(string str)
 {
@@ -37,12 +32,12 @@ void Commands::clear()
 
 Dumper::Dumper()
 {
-    cout << "ctor Dumper" << endl;
+    //cout << "ctor Dumper" << endl;
 }
 
 Dumper::~Dumper()
 {
-    cout << "dtor Dumper" << endl;
+    //cout << "dtor Dumper" << endl;
 }
 
 void Dumper::subscribe(Observer *ob)
@@ -73,18 +68,18 @@ void Dumper::stop_dumping()
 
 ConsoleDumper::ConsoleDumper(shared_ptr<Dumper> dmp)
 {
-    cout << "ctor ConsoleDumper" << endl;
+    //cout << "ctor ConsoleDumper" << endl;
     dmp->subscribe(this);
 }
 
 ConsoleDumper::~ConsoleDumper()
 {
-    cout << "dtor ConsoleDumper" << endl;
+    //cout << "dtor ConsoleDumper" << endl;
 }
 
 void ConsoleDumper::dump(Commands &cmd)
 {
-    cout << "ConsoleDumper::dump" << endl;
+    //cout << "ConsoleDumper::dump" << endl;
     {
         lock_guard<mutex> lg(m);
         q.push(cmd);
@@ -94,11 +89,7 @@ void ConsoleDumper::dump(Commands &cmd)
 
 void ConsoleDumper::stop()
 {
-    cout << "ConsoleDumper::stop" << endl;
-    {
-        lock_guard<mutex> lg(m);
-        run_flag = false;
-    }
+    run_flag = false;
     cv.notify_all();
 }
 
@@ -108,7 +99,6 @@ void ConsoleDumper::dumper(Metrics &metrics)
     {
         unique_lock<mutex> lk(m);
         cv.wait(lk, [this]{return (!run_flag || !q.empty());});
-//        cout << "con dump " << run_flag << " " << q.empty() << endl;
         if(!run_flag && q.empty())
         {
             return;
@@ -116,7 +106,7 @@ void ConsoleDumper::dumper(Metrics &metrics)
 
         auto commands = q.front();
         q.pop();
-        //lk.unlock();
+        lk.unlock();
 
         metrics += commands.metrics;
         bool is_first = true;
@@ -135,44 +125,17 @@ void ConsoleDumper::dumper(Metrics &metrics)
         }
         cout << endl;
     }
-//    while (run_flag)
-//    {
-//        unique_lock<mutex> lk(m);
-//        cv.wait(lk, [this]{return flag;});
-
-//        if(commands.cmds.size())
-//        {
-//            log_metrics += commands.metrics;
-//            bool is_first = true;
-//            cout << "bulk: ";
-//            for(auto s : commands.cmds)
-//            {
-//                if(is_first)
-//                {
-//                    is_first = false;
-//                }
-//                else
-//                {
-//                    cout << ", ";
-//                }
-//                cout << s;
-//            }
-//            cout << endl;
-//        }
-//        flag = false;
-//    }
-//    return log_metrics;
 }
 
 FileDumper::FileDumper(shared_ptr<Dumper> dmp)
 {
-    cout << "ctor FileDumper" << endl;
+    //cout << "ctor FileDumper" << endl;
     dmp->subscribe(this);
 }
 
 FileDumper::~FileDumper()
 {
-    cout << "dtor FileDumper" << endl;
+    //cout << "dtor FileDumper" << endl;
 }
 
 string FileDumper::get_unique_number()
@@ -183,7 +146,7 @@ string FileDumper::get_unique_number()
 
 void FileDumper::dump(Commands &cmd)
 {
-    cout << "FileDumper::dump" << endl;
+    //cout << "FileDumper::dump" << endl;
     {
         lock_guard<mutex> lg(m);
         q.push(cmd);
@@ -193,13 +156,7 @@ void FileDumper::dump(Commands &cmd)
 
 void FileDumper::stop()
 {
-    cout << "FileDumper::stop" << endl;
-    {
-        lock_guard<mutex> lg(m);
-        run_flag = false;
-        //flag = true;
-        //commands.clear();
-    }
+    run_flag = false;
     cv.notify_all();
 }
 
@@ -209,7 +166,6 @@ void FileDumper::dumper(Metrics &metrics)
     {
         unique_lock<mutex> lk(m);
         cv.wait(lk, [this]{return (!run_flag || !q.empty());});
-//        cout << "file dump " << run_flag << " " << q.empty() << endl;
         if(!run_flag && q.empty())
         {
             return;
@@ -217,7 +173,7 @@ void FileDumper::dumper(Metrics &metrics)
 
         auto cmds = q.front();
         q.pop();
-        //lk.unlock();
+        lk.unlock();
 
         metrics += cmds.metrics;
 
@@ -245,7 +201,7 @@ void FileDumper::dumper(Metrics &metrics)
 
 BulkContext::BulkContext(size_t bulk_size_)
 {
-    cout << "ctor BulkContext" << endl;
+    //cout << "ctor BulkContext" << endl;
     bulk_size = bulk_size_;
     blockFound = false;
     nestedBlocksCount = 0;
@@ -256,31 +212,9 @@ BulkContext::BulkContext(size_t bulk_size_)
     fileDumper = make_shared<FileDumper>(dumper);
 }
 
-//BulkContext::BulkContext(size_t bulk_size_, queue<Commands> *cq, queue<Commands> *fq,
-//                    mutex *cm, mutex *fm,
-//                    condition_variable *ccv, condition_variable *fcv)
-//{
-//    cout << "ctor BulkContext 1" << endl;
-//    bulk_size = bulk_size_;
-//    blockFound = false;
-//    nestedBlocksCount = 0;
-//    lines_count = 0;
-
-//    dumper = make_shared<Dumper>();
-
-//    console_queue = cq;
-//    file_queue = fq;
-
-//    console_mutex = cm;
-//    file_mutex = fm;
-
-//    console_cv = ccv;
-//    file_cv = fcv;
-//}
-
 BulkContext::~BulkContext()
 {
-    cout << "dtor BulkContext" << endl;
+    //cout << "dtor BulkContext" << endl;
 }
 
 void BulkContext::add_line(string &cmd)
@@ -293,7 +227,6 @@ void BulkContext::add_line(string &cmd)
         if(cmds.metrics.commands == bulk_size)
         {
             dumper->dump_commands(cmds);
-            //dump(cmds);
             metrics += cmds.metrics;
             cmds.clear();
         }
@@ -306,7 +239,6 @@ void BulkContext::add_line(string &cmd)
             if(cmds.metrics.commands)
             {
                 dumper->dump_commands(cmds);
-                //dump(cmds);
                 metrics += cmds.metrics;
                 cmds.clear();
             }
@@ -328,7 +260,6 @@ void BulkContext::add_line(string &cmd)
             {
                 ++cmds.metrics.blocks;
                 dumper->dump_commands(cmds);
-                //dump(cmds);
                 metrics += cmds.metrics;
                 cmds.clear();
                 blockFound = false;
@@ -346,25 +277,9 @@ void BulkContext::end_input()
     if(cmds.metrics.commands)
     {
         dumper->dump_commands(cmds);
-        //dump(cmds);
         metrics.commands += cmds.metrics.commands;
     }
     dumper->stop_dumping();
-}
-
-void BulkContext::dump(Commands cmd)
-{
-//    {
-//        lock_guard<mutex> lgc(*console_mutex);
-//        console_queue->push(cmd);
-//    }
-//    console_cv->notify_one();
-
-//    {
-//        lock_guard<mutex> lgf(*file_mutex);
-//        file_queue->push(cmd);
-//    }
-//    file_cv->notify_one();
 }
 
 void BulkContext::print_metrics()
@@ -374,5 +289,3 @@ void BulkContext::print_metrics()
                      << metrics.blocks << " blocks"
                      << endl;
 }
-
-

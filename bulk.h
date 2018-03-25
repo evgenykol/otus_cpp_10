@@ -23,11 +23,7 @@ public:
     size_t blocks;
     size_t commands;
 
-    Metrics()
-    {
-        blocks = 0;
-        commands = 0;
-    }
+    Metrics() : blocks(0), commands(0) {}
     Metrics(size_t blocks_, size_t commands) : blocks(blocks_), commands(commands) {}
 
     const Metrics operator+ (const Metrics &rhs)
@@ -44,7 +40,7 @@ public:
 
     static void print_metrics(const Metrics &m, const string &name)
     {
-        cout << name <<": " << m.commands << " commands, " << m.blocks << " blocks" << endl;
+        cout << name << ": " << m.commands << " commands, " << m.blocks << " blocks" << endl;
     }
 };
 
@@ -71,7 +67,7 @@ protected:
 public:
     Observer()
     {
-        cout << "ctor Observer" << endl;
+        //cout << "ctor Observer" << endl;
         run_flag = true;
     }
 
@@ -83,6 +79,7 @@ public:
 
     virtual void dump(Commands &cmd) = 0;
     virtual void stop() = 0;
+    virtual void dumper(Metrics &metrics) = 0;
 };
 
 class Dumper
@@ -116,6 +113,7 @@ public:
     void dump(Commands &cmd);
     void stop();
     void dumper(Metrics &metrics);
+
     string get_unique_number();
 };
 
@@ -143,7 +141,6 @@ public:
     void add_line(string &cmd);
     void end_input();
     void print_metrics();
-    void dump(Commands cmd);
 };
 
 }
