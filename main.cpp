@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
             return 0;
         }
 
-        freopen("cmd_input.txt", "rt", stdin);
+        //freopen("cmd_input.txt", "rt", stdin);
 
         auto blk = bulk::BulkContext(commandsCount);
 
