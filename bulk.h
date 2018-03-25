@@ -62,6 +62,11 @@ public:
 
 class Observer
 {
+protected:
+    mutex m;
+    condition_variable cv;
+    queue<Commands> q;
+    atomic<bool> run_flag;
 
 public:
     Observer()
@@ -78,8 +83,6 @@ public:
 
     virtual void dump(Commands &cmd) = 0;
     virtual void stop() = 0;
-
-    atomic<bool> run_flag;
 };
 
 class Dumper
@@ -96,32 +99,23 @@ public:
 
 class ConsoleDumper : public Observer
 {
-    mutex m;
-    condition_variable cv;
-    bool flag;
-    Commands commands;
-
 public:
     ConsoleDumper(shared_ptr<Dumper> dmp);
     ~ConsoleDumper();
     void dump(Commands &cmd);
     void stop();
-    Metrics dumper();
+    void dumper(Metrics &metrics);
+
 };
 
 class FileDumper : public Observer
 {
-    mutex m;
-    condition_variable cv;
-    bool flag;
-    queue<Commands> commands;
-
 public:
     FileDumper(shared_ptr<Dumper> dmp);
     ~FileDumper();
     void dump(Commands &cmd);
     void stop();
-    Metrics dumper();
+    void dumper(Metrics &metrics);
     string get_unique_number();
 };
 
@@ -139,23 +133,11 @@ class BulkContext
     bool blockFound;
     int nestedBlocksCount;
 
-    queue<Commands> *console_queue;
-    queue<Commands> *file_queue;
-
-    mutex *console_mutex;
-    mutex *file_mutex;
-
-    condition_variable *console_cv;
-    condition_variable *file_cv;
-
 public:
     shared_ptr<ConsoleDumper> conDumper;
     shared_ptr<FileDumper> fileDumper;
 
-    BulkContext(size_t bulk_size);
-    BulkContext(size_t bulk_size_, queue<Commands> *cq, queue<Commands> *fq,
-                        mutex *cm, mutex *fm,
-                        condition_variable *ccv, condition_variable *fcv);
+    BulkContext(size_t bulk_size_);
     ~BulkContext();
 
     void add_line(string &cmd);

@@ -87,8 +87,7 @@ void ConsoleDumper::dump(Commands &cmd)
     cout << "ConsoleDumper::dump" << endl;
     {
         lock_guard<mutex> lg(m);
-        commands = cmd;
-        flag = true;
+        q.push(cmd);
     }
     cv.notify_one();
 }
@@ -99,41 +98,70 @@ void ConsoleDumper::stop()
     {
         lock_guard<mutex> lg(m);
         run_flag = false;
-        flag = true;
-        commands.clear();
     }
     cv.notify_all();
 }
 
-Metrics ConsoleDumper::dumper()
+void ConsoleDumper::dumper(Metrics &metrics)
 {
-    while (run_flag)
+    while (run_flag || !q.empty())
     {
         unique_lock<mutex> lk(m);
-        cv.wait(lk, [this]{return flag;});
-
-        if(commands.cmds.size())
+        cv.wait(lk, [this]{return (!run_flag || !q.empty());});
+//        cout << "con dump " << run_flag << " " << q.empty() << endl;
+        if(!run_flag && q.empty())
         {
-            log_metrics += commands.metrics;
-            bool is_first = true;
-            cout << "bulk: ";
-            for(auto s : commands.cmds)
-            {
-                if(is_first)
-                {
-                    is_first = false;
-                }
-                else
-                {
-                    cout << ", ";
-                }
-                cout << s;
-            }
-            cout << endl;
+            return;
         }
-        flag = false;
+
+        auto commands = q.front();
+        q.pop();
+        //lk.unlock();
+
+        metrics += commands.metrics;
+        bool is_first = true;
+        cout << "bulk: ";
+        for(auto s : commands.cmds)
+        {
+            if(is_first)
+            {
+                is_first = false;
+            }
+            else
+            {
+                cout << ", ";
+            }
+            cout << s;
+        }
+        cout << endl;
     }
-    return log_metrics;
+//    while (run_flag)
+//    {
+//        unique_lock<mutex> lk(m);
+//        cv.wait(lk, [this]{return flag;});
+
+//        if(commands.cmds.size())
+//        {
+//            log_metrics += commands.metrics;
+//            bool is_first = true;
+//            cout << "bulk: ";
+//            for(auto s : commands.cmds)
+//            {
+//                if(is_first)
+//                {
+//                    is_first = false;
+//                }
+//                else
+//                {
+//                    cout << ", ";
+//                }
+//                cout << s;
+//            }
+//            cout << endl;
+//        }
+//        flag = false;
+//    }
+//    return log_metrics;
 }
 
 FileDumper::FileDumper(shared_ptr<Dumper> dmp)
@@ -158,7 +186,7 @@ void FileDumper::dump(Commands &cmd)
     cout << "FileDumper::dump" << endl;
     {
         lock_guard<mutex> lg(m);
-        commands.push(cmd);
+        q.push(cmd);
     }
     cv.notify_one();
 }
@@ -175,18 +203,23 @@ void FileDumper::stop()
     cv.notify_all();
 }
 
-Metrics FileDumper::dumper()
+void FileDumper::dumper(Metrics &metrics)
 {
-    while (run_flag || commands.size())
+    while (run_flag || !q.empty())
     {
         unique_lock<mutex> lk(m);
-        cv.wait_for(lk, 10s/*,[this]{return commands.size();}*/);
+        cv.wait(lk, [this]{return (!run_flag || !q.empty());});
+//        cout << "file dump " << run_flag << " " << q.empty() << endl;
+        if(!run_flag && q.empty())
+        {
+            return;
+        }
 
-        auto cmds = commands.front();
-        commands.pop();
+        auto cmds = q.front();
+        q.pop();
         //lk.unlock();
 
-        log_metrics += cmds.metrics;
+        metrics += cmds.metrics;
 
         string filename = "bulk" + to_string(cmds.timestamp) + "_" + get_unique_number() + ".log";
         ofstream of(filename);
@@ -208,43 +241,42 @@ Metrics FileDumper::dumper()
         of << endl;
         of.close();
     }
-    return log_metrics;
 }
 
-//BulkContext::BulkContext(size_t bulk_size_)
-//{
-//    cout << "ctor BulkContext" << endl;
-//    bulk_size = bulk_size_;
-//    blockFound = false;
-//    nestedBlocksCount = 0;
-//    lines_count = 0;
-
-//    dumper = make_shared<Dumper>();
-//    conDumper = make_shared<ConsoleDumper>(dumper);
-//    fileDumper = make_shared<FileDumper>(dumper);
-//}
-
-BulkContext::BulkContext(size_t bulk_size_, queue<Commands> *cq, queue<Commands> *fq,
-                    mutex *cm, mutex *fm,
-                    condition_variable *ccv, condition_variable *fcv)
+BulkContext::BulkContext(size_t bulk_size_)
 {
-    cout << "ctor BulkContext 1" << endl;
+    cout << "ctor BulkContext" << endl;
     bulk_size = bulk_size_;
     blockFound = false;
     nestedBlocksCount = 0;
     lines_count = 0;
 
     dumper = make_shared<Dumper>();
-
-    console_queue = cq;
-    file_queue = fq;
-
-    console_mutex = cm;
-    file_mutex = fm;
-
-    console_cv = ccv;
-    file_cv = fcv;
+    conDumper = make_shared<ConsoleDumper>(dumper);
+    fileDumper = make_shared<FileDumper>(dumper);
 }
+
+//BulkContext::BulkContext(size_t bulk_size_, queue<Commands> *cq, queue<Commands> *fq,
+//                    mutex *cm, mutex *fm,
+//                    condition_variable *ccv, condition_variable *fcv)
+//{
+//    cout << "ctor BulkContext 1" << endl;
+//    bulk_size = bulk_size_;
+//    blockFound = false;
+//    nestedBlocksCount = 0;
+//    lines_count = 0;
+
+//    dumper = make_shared<Dumper>();
+
+//    console_queue = cq;
+//    file_queue = fq;
+
+//    console_mutex = cm;
+//    file_mutex = fm;
+
+//    console_cv = ccv;
+//    file_cv = fcv;
+//}
 
 BulkContext::~BulkContext()
 {
@@ -260,8 +292,8 @@ void BulkContext::add_line(string &cmd)
 
         if(cmds.metrics.commands == bulk_size)
         {
-            //dumper->dump_commands(cmds);
-            dump(cmds);
+            dumper->dump_commands(cmds);
+            //dump(cmds);
             metrics += cmds.metrics;
             cmds.clear();
         }
@@ -273,8 +305,8 @@ void BulkContext::add_line(string &cmd)
             blockFound = true;
             if(cmds.metrics.commands)
             {
-                //dumper->dump_commands(cmds);
-                dump(cmds);
+                dumper->dump_commands(cmds);
+                //dump(cmds);
                 metrics += cmds.metrics;
                 cmds.clear();
             }
@@ -295,8 +327,8 @@ void BulkContext::add_line(string &cmd)
             else
             {
                 ++cmds.metrics.blocks;
-                //dumper->dump_commands(cmds);
-                dump(cmds);
+                dumper->dump_commands(cmds);
+                //dump(cmds);
                 metrics += cmds.metrics;
                 cmds.clear();
                 blockFound = false;
@@ -313,26 +345,26 @@ void BulkContext::end_input()
 {
     if(cmds.metrics.commands)
     {
-        //dumper->dump_commands(cmds);
-        dump(cmds);
+        dumper->dump_commands(cmds);
+        //dump(cmds);
         metrics.commands += cmds.metrics.commands;
     }
-    //dumper->stop_dumping();
+    dumper->stop_dumping();
 }
 
 void BulkContext::dump(Commands cmd)
 {
-    {
-        lock_guard<mutex> lgc(*console_mutex);
-        console_queue->push(cmd);
-    }
-    console_cv->notify_one();
+//    {
+//        lock_guard<mutex> lgc(*console_mutex);
+//        console_queue->push(cmd);
+//    }
+//    console_cv->notify_one();
 
-    {
-        lock_guard<mutex> lgf(*file_mutex);
-        file_queue->push(cmd);
-    }
-    file_cv->notify_one();
+//    {
+//        lock_guard<mutex> lgf(*file_mutex);
+//        file_queue->push(cmd);
+//    }
+//    file_cv->notify_one();
 }
 
 void BulkContext::print_metrics()
