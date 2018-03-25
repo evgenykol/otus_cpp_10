@@ -274,7 +274,7 @@ void BulkContext::add_line(string &cmd)
 
 void BulkContext::end_input()
 {
-    if(cmds.metrics.commands)
+    if(cmds.metrics.commands && !blockFound)
     {
         dumper->dump_commands(cmds);
         metrics.commands += cmds.metrics.commands;
