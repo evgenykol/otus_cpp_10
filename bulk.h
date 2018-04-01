@@ -2,18 +2,10 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <vector>
-#include <ctime>
 #include <mutex>
 #include <condition_variable>
-#include <thread>
-#include <future>
 #include <atomic>
-#include <memory>
 #include <queue>
-#include <chrono>
-
-using namespace std;
 
 namespace bulk{
 
@@ -38,53 +30,46 @@ public:
         return *this;
     }
 
-    static void print_metrics(const Metrics &m, const string &name)
+    static void print_metrics(const Metrics &m, const std::string &name)
     {
-        cout << name << ": " << m.commands << " commands, " << m.blocks << " blocks" << endl;
+        std::cout << name << ": " << m.commands << " commands, " << m.blocks << " blocks" << std::endl;
     }
 };
 
 class Commands
 {
 public:
-    vector<string> cmds;
+    std::vector<std::string> cmds;
     time_t timestamp;
     Metrics metrics;
 
-    void push_back(string str);
-    void push_back_block(string str);
+    void push_back(std::string str);
+    void push_back_block(std::string str);
     void clear();
 };
 
 class Observer
 {
 protected:
-    mutex m;
-    condition_variable cv;
-    queue<Commands> q;
-    atomic<bool> run_flag;
+    std::mutex m;
+    std::condition_variable cv;
+    std::queue<Commands> q;
+    std::atomic<bool> run_flag;
 
 public:
-    Observer()
-    {
-        //cout << "ctor Observer" << endl;
-        run_flag = true;
-    }
-
-    ~Observer()
-    {
-        //cout << "dtor Observer" << endl;
-        run_flag = false;
-    }
+    Observer();
+    ~Observer();
 
     virtual void dump(Commands &cmd) = 0;
     virtual void stop() = 0;
     virtual void dumper(Metrics &metrics) = 0;
+
+    bool queue_not_empty();
 };
 
 class Dumper
 {
-    vector<Observer *> subs;
+    std::vector<Observer *> subs;
 public:
     Dumper();
     ~Dumper();
@@ -97,7 +82,7 @@ public:
 class ConsoleDumper : public Observer
 {
 public:
-    ConsoleDumper(shared_ptr<Dumper> dmp);
+    ConsoleDumper(std::shared_ptr<Dumper> dmp);
     ~ConsoleDumper();
     void dump(Commands &cmd);
     void stop();
@@ -107,14 +92,15 @@ public:
 
 class FileDumper : public Observer
 {
+    std::atomic<int> unique_file_counter;
 public:
-    FileDumper(shared_ptr<Dumper> dmp);
+    FileDumper(std::shared_ptr<Dumper> dmp);
     ~FileDumper();
     void dump(Commands &cmd);
     void stop();
     void dumper(Metrics &metrics);
 
-    string get_unique_number();
+    std::string get_unique_number();
 };
 
 
@@ -122,7 +108,7 @@ class BulkContext
 {
     static constexpr char delimiter = '\n';
     size_t bulk_size;
-    shared_ptr<Dumper> dumper;
+    std::shared_ptr<Dumper> dumper;
 
     Commands cmds;
     Metrics metrics;
@@ -131,14 +117,16 @@ class BulkContext
     bool blockFound;
     int nestedBlocksCount;
 
+    void dump_block();
+
 public:
-    shared_ptr<ConsoleDumper> conDumper;
-    shared_ptr<FileDumper> fileDumper;
+    std::shared_ptr<ConsoleDumper> conDumper;
+    std::shared_ptr<FileDumper> fileDumper;
 
     BulkContext(size_t bulk_size_);
     ~BulkContext();
 
-    void add_line(string &cmd);
+    void add_line(std::string &cmd);
     void end_input();
     void print_metrics();
 };

@@ -30,6 +30,24 @@ void Commands::clear()
     metrics.blocks = 0;
 }
 
+Observer::Observer()
+{
+    //cout << "ctor Observer" << endl;
+    run_flag = true;
+}
+
+Observer::~Observer()
+{
+    //cout << "dtor Observer" << endl;
+    run_flag = false;
+}
+
+bool Observer::queue_not_empty()
+{
+    unique_lock<mutex> lk(m);
+    return !q.empty();
+}
+
 Dumper::Dumper()
 {
     //cout << "ctor Dumper" << endl;
@@ -95,7 +113,7 @@ void ConsoleDumper::stop()
 
 void ConsoleDumper::dumper(Metrics &metrics)
 {
-    while (run_flag || !q.empty())
+    while (run_flag || queue_not_empty())
     {
         unique_lock<mutex> lk(m);
         cv.wait(lk, [this]{return (!run_flag || !q.empty());});
@@ -130,6 +148,7 @@ void ConsoleDumper::dumper(Metrics &metrics)
 FileDumper::FileDumper(shared_ptr<Dumper> dmp)
 {
     //cout << "ctor FileDumper" << endl;
+    unique_file_counter = 0;
     dmp->subscribe(this);
 }
 
@@ -140,7 +159,6 @@ FileDumper::~FileDumper()
 
 string FileDumper::get_unique_number()
 {
-    static int unique_file_counter = 0;
     return to_string(++unique_file_counter);
 }
 
@@ -162,7 +180,7 @@ void FileDumper::stop()
 
 void FileDumper::dumper(Metrics &metrics)
 {
-    while (run_flag || !q.empty())
+    while (run_flag || queue_not_empty())
     {
         unique_lock<mutex> lk(m);
         cv.wait(lk, [this]{return (!run_flag || !q.empty());});
@@ -226,9 +244,7 @@ void BulkContext::add_line(string &cmd)
 
         if(cmds.metrics.commands == bulk_size)
         {
-            dumper->dump_commands(cmds);
-            metrics += cmds.metrics;
-            cmds.clear();
+            dump_block();
         }
     }
     else
@@ -238,9 +254,7 @@ void BulkContext::add_line(string &cmd)
             blockFound = true;
             if(cmds.metrics.commands)
             {
-                dumper->dump_commands(cmds);
-                metrics += cmds.metrics;
-                cmds.clear();
+                dump_block();
             }
             return;
         }
@@ -254,14 +268,12 @@ void BulkContext::add_line(string &cmd)
             if (nestedBlocksCount > 0)
             {
                 --nestedBlocksCount;
-                ++cmds.metrics.blocks;
+                //++cmds.metrics.blocks;
             }
             else
             {
-                ++cmds.metrics.blocks;
-                dumper->dump_commands(cmds);
-                metrics += cmds.metrics;
-                cmds.clear();
+                //++cmds.metrics.blocks;
+                dump_block();
                 blockFound = false;
             }
         }
@@ -272,12 +284,19 @@ void BulkContext::add_line(string &cmd)
     }
 }
 
+void BulkContext::dump_block()
+{
+    ++cmds.metrics.blocks;
+    dumper->dump_commands(cmds);
+    metrics += cmds.metrics;
+    cmds.clear();
+}
+
 void BulkContext::end_input()
 {
     if(cmds.metrics.commands && !blockFound)
     {
-        dumper->dump_commands(cmds);
-        metrics.commands += cmds.metrics.commands;
+        dump_block();
     }
     dumper->stop_dumping();
 }
