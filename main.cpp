@@ -1,6 +1,6 @@
 #include <iostream>
 #include <thread>
-
+#include <functional>
 #include "string.h"
 
 #include "version.h"
